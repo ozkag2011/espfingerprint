@@ -28,8 +28,8 @@
 # =====================================================================
 
 # ---------------------------- Wi-Fi ----------------------------------
-WIFI_SSID = "SUPERONLINE_Wi-Fi_6552"
-WIFI_PASSWORD = "2K9eNYYH9cAY"
+WIFI_SSID = "WİFİ-AD"
+WIFI_PASSWORD = "WİFİ-ŞİFRE"
 TIMEZONE_HOURS = 3            # Saat dilimi (UTC+3 = Türkiye)
 
 # ------------------------- Web paneli --------------------------------
