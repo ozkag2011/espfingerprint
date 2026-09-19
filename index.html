@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Paneli | Akıllı Kilit</title>
+    <style>
+        :root {
+            --surface: #ffffff;
+            --ink: #000000;
+            --ink-light: #555555;
+            --action: #000000;
+            --alert: #D32F2F;
+            --success: #1B5E20;
+            --border: #000000;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #e0e0e0; color: var(--ink); margin: 0; padding: 2rem 1rem; }
+        .container { max-width: 900px; margin: 0 auto; background: var(--surface); border: 2px solid var(--border); }
+        .header { border-bottom: 2px solid var(--border); padding: 1.5rem 2rem; display: flex; justify-content: space-between; align-items: baseline; }
+        h1 { margin: 0; font-size: 1.8rem; font-weight: 800; letter-spacing: -0.02em; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 2px solid var(--border); }
+        .grid > div { padding: 2rem; border-right: 2px solid var(--border); }
+        .grid > div:last-child { border-right: none; }
+        @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } .grid > div { border-right: none; border-bottom: 2px solid var(--border); } .grid > div:last-child { border-bottom: none; } }
+        h2 { font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--ink); padding-bottom: 0.5rem; margin-top: 0; }
+        input, button { width: 100%; box-sizing: border-box; padding: 0.75rem; margin-bottom: 1rem; border: 1px solid var(--ink-light); font-size: 1rem; border-radius: 0; }
+        button { background: var(--action); color: #fff; border: 2px solid var(--action); font-weight: 600; cursor: pointer; transition: background 0.1s; }
+        button:hover { background: #fff; color: var(--action); }
+        button.danger { background: #fff; color: var(--alert); border-color: var(--alert); }
+        button.danger:hover { background: var(--alert); color: #fff; }
+        .log-panel { background: var(--ink); color: #4CAF50; font-family: monospace; font-size: 0.85rem; padding: 1.5rem; height: 250px; overflow-y: auto; margin: 0; }
+        ul { list-style: none; padding: 0; margin: 0; }
+        li { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0; border-bottom: 1px solid #ccc; font-size: 0.95rem; }
+        li span { font-weight: 500; }
+        .status { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--alert); margin-right: 8px; }
+        .status.ok { background: var(--success); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Erişim Kontrol</h1>
+            <span id="time-text">--.--.---- --:--:--</span>
+        </div>
+        
+        <div class="grid">
+            <div>
+                <h2>Sistem Durumu</h2>
+                <p><span id="door-status" class="status"></span> Röle/Kapı: <strong id="door-text">Kilitli</strong></p>
+                <p><span id="sensor-status" class="status"></span> Sensör: <strong id="sensor-text">Bekleniyor</strong></p>
+                <div id="enroll-msg" style="color: var(--action); font-weight: bold; margin-top: 1rem; min-height: 1.5rem;"></div>
+            </div>
+
+            <div>
+                <h2>Yeni Kayıt İşlemi</h2>
+                <input type="text" id="new-name" placeholder="Kişi Adı">
+                <input type="password" id="admin-key" placeholder="Yönetici Şifresi (config.py)">
+                <button onclick="startEnroll()">Parmak İzi Ekle</button>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div>
+                <h2>Erişim İzinleri</h2>
+                <ul id="finger-list">Yükleniyor...</ul>
+            </div>
+            <div>
+                <h2>Erişim Geçmişi</h2>
+                <ul id="event-list">Yükleniyor...</ul>
+            </div>
+        </div>
+
+        <div>
+            <div class="log-panel" id="log-box">Sistem başlatılıyor...</div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchState() {
+            try {
+                const res = await fetch('/api/state');
+                const data = await res.json();
+                
+                document.getElementById('door-status').className = 'status ' + (data.door ? 'ok' : '');
+                document.getElementById('door-text').textContent = data.door ? 'AÇIK' : 'Kilitli';
+                document.getElementById('sensor-status').className = 'status ' + (data.sensor ? 'ok' : '');
+                document.getElementById('sensor-text').textContent = data.sensor ? 'Aktif' : 'Çevrimdışı';
+                document.getElementById('time-text').textContent = data.time;
+                document.getElementById('enroll-msg').textContent = data.msg || (data.busy ? "İşlem sürüyor..." : "");
+
+                document.getElementById('finger-list').innerHTML = data.fingers.map(f => 
+                    `<li><span>[#${f[0]}] ${f[1]}</span> <button class="danger" style="width: auto; padding: 0.25rem 0.75rem; margin: 0; font-size: 0.8rem;" onclick="deleteFinger(${f[0]})">Sil</button></li>`
+                ).join('') || '<li>Kayıt bulunamadı.</li>';
+
+                document.getElementById('event-list').innerHTML = data.events.slice().reverse().map(e => 
+                    `<li><small style="color:var(--ink-light); width:60px;">${e[0].split(' ')[1]}</small> <span>${e[2]}</span> <small>${e[1]}</small></li>`
+                ).join('') || '<li>Kayıt yok.</li>';
+
+                const logBox = document.getElementById('log-box');
+                logBox.innerHTML = data.log.join('<br>');
+                if(!data.busy) logBox.scrollTop = logBox.scrollHeight;
+            } catch (e) {
+                console.error('API Bağlantı hatası');
+            }
+        }
+
+        async function startEnroll() {
+            const name = document.getElementById('new-name').value;
+            const key = document.getElementById('admin-key').value;
+            if(!name || !key) return alert('İsim ve şifre zorunlu!');
+            
+            const res = await fetch(`/api/enroll?name=${encodeURIComponent(name)}&key=${encodeURIComponent(key)}`, {method: 'POST'});
+            const data = await res.json();
+            alert(data.msg);
+            fetchState();
+        }
+
+        async function deleteFinger(id) {
+            if(!confirm('ID #' + id + ' silinecek. Onaylıyor musunuz?')) return;
+            const key = document.getElementById('admin-key').value;
+            if(!key) return alert('Silme işlemi için yönetici şifresini kutuya girin.');
+            
+            const res = await fetch(`/api/delete?id=${id}&key=${encodeURIComponent(key)}`, {method: 'POST'});
+            const data = await res.json();
+            alert(data.msg);
+            fetchState();
+        }
+
+        setInterval(fetchState, 1500);
+        fetchState();
+    </script>
+</body>
+</html>
